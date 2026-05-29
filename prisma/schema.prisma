@@ -1,0 +1,136 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  LEADER
+  USER
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  password  String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+
+  // Relations
+  ledGroups           Group[]        @relation("GroupLeader")
+  memberships         GroupMember[]
+  paidExpenses        Expense[]      @relation("PaidExpenses")
+  splits              Split[]
+  sentSettlements     Settlement[]   @relation("SentSettlements")
+  receivedSettlements Settlement[]   @relation("ReceivedSettlements")
+}
+
+model Group {
+  id            String            @id @default(uuid())
+  name          String
+  description   String?
+  leaderId      String
+  perPersonCost Float             @default(0)
+  totalMembers  Int               @default(10)
+  tripDate      DateTime?
+  budget        Float             @default(0)
+  createdAt     DateTime          @default(now())
+
+  // Relations
+  leader      User              @relation("GroupLeader", fields: [leaderId], references: [id], onDelete: Cascade)
+  members     GroupMember[]
+  expenses    Expense[]
+  settlements Settlement[]
+  invitations GroupInvitation[]
+}
+
+model GroupMember {
+  id         String   @id @default(uuid())
+  groupId    String
+  userId     String
+  joinedAt   DateTime @default(now())
+  paidAmount Float    @default(0)
+
+  // Relations
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  groupId     String
+  paidById    String
+  amount      Float
+  category    String
+  description String
+  date        DateTime @default(now())
+
+  // Relations
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  payer       User     @relation("PaidExpenses", fields: [paidById], references: [id], onDelete: Cascade)
+  splits      Split[]
+}
+
+model Split {
+  id        String   @id @default(uuid())
+  expenseId String
+  userId    String
+  amount    Float
+
+  // Relations
+  expense   Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([expenseId, userId])
+}
+
+enum SettlementStatus {
+  PENDING
+  PENDING_VERIFICATION
+  VERIFIED
+}
+
+model Settlement {
+  id         String           @id @default(uuid())
+  groupId    String
+  fromUserId String
+  toUserId   String
+  amount     Float
+  status     SettlementStatus @default(PENDING)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  // Relations
+  group      Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  fromUser   User             @relation("SentSettlements", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser     User             @relation("ReceivedSettlements", fields: [toUserId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model GroupInvitation {
+  id        String   @id @default(uuid())
+  groupId   String
+  email     String?
+  phone     String?
+  token     String   @unique
+  createdAt DateTime @default(now())
+
+  // Relations
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
